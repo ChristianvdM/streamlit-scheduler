@@ -10,7 +10,7 @@ st.set_page_config(page_title="Production Team Scheduler", layout="wide")
 # Add centered logo
 st.markdown("""
     <div style='text-align: center;'>
-        <img src='image.png' width='200'>
+        <img src='image.png' width='600'>
     </div>
 """, unsafe_allow_html=True)
 
