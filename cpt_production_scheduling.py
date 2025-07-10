@@ -18,15 +18,7 @@ st.markdown(
         .stApp {
             background-color: #000000;
         }
-        .css-1d391kg, .css-1v0mbdj, .css-hxt7ib, .css-ffhzg2, .css-1c7y2kd {
-            background-color: #000000 !important;
-            color: white !important;
-        }
-        .stButton>button {
-            background-color: #444;
-            color: white;
-        }
-        .stDownloadButton>button {
+        .stButton>button, .stDownloadButton>button {
             background-color: #444;
             color: white;
         }
@@ -35,17 +27,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Load and center the logo using Streamlit's image uploader with base64 fallback
+# Load and center the logo
 with open("image.png", "rb") as img_file:
     encoded = base64.b64encode(img_file.read()).decode()
     st.markdown(f"""
         <div style='text-align: center;'>
-            <img src='data:image/png;base64,{encoded}' width='600'>
+            <img src='data:image/png;base64,{encoded}' width='300'>
         </div>
     """, unsafe_allow_html=True)
 
 st.title("📅 Production Team Scheduler – August 2025")
-
 st.markdown("Upload your **Skills CSV** and **Availability CSV** below. Then click 'Generate Schedule' to preview and download the Excel file.")
 
 skills_file = st.file_uploader("Upload skills CSV", type="csv")
@@ -79,7 +70,6 @@ if skills_file and availability_file:
     # Assign Directors First
     for date in saturday_dates + sunday_dates:
         available = availability[availability[date] == "Yes"]["Name"].tolist()
-
         if date in saturday_dates:
             eligible = get_eligible(available, "Director", 2)
             pool = eligible if eligible else available
@@ -88,7 +78,6 @@ if skills_file and availability_file:
                 schedule["Tygerberg_Saturday"][date]["Director"] = director
                 assignments_count[director] += 1
                 detailed_assignments.append((director, "Tygerberg", "Director", "Saturday"))
-
         if date in sunday_dates:
             for campus in CAMPUS:
                 eligible = get_eligible(available, "Director", 2)
@@ -112,7 +101,6 @@ if skills_file and availability_file:
                     used.add(main)
                     assignments_count[main] += 1
                     detailed_assignments.append((main, campus, f"{role} Main", "Sunday"))
-
                 assist = next((p for p in get_least_assigned(get_eligible(available, col, 1)) if p not in used and p != main), None)
                 if assist:
                     schedule[f"{campus}_Sunday"][date][f"{role} Assistant"] = assist
@@ -123,7 +111,6 @@ if skills_file and availability_file:
     for date in saturday_dates:
         available = availability[availability[date] == "Yes"]["Name"].tolist()
         used = set(schedule["Tygerberg_Saturday"][date].values())
-
         for role in ["Sound", "Lights", "Resi"]:
             col = f"{role}_Tygerberg"
             main = next((p for p in get_least_assigned(get_eligible(available, col, 2)) if p not in used), None)
@@ -132,10 +119,8 @@ if skills_file and availability_file:
                 used.add(main)
                 assignments_count[main] += 1
                 detailed_assignments.append((main, "Tygerberg", role, "Saturday"))
-
         def total_skill(p):
             return skills.loc[skills["Name"] == p, ["Sound_Tygerberg", "Lights_Tygerberg", "Resi_Tygerberg", "Director"]].sum(axis=1).values[0]
-
         eligible_assist = [p for p in available if p not in used and any(get_skill(p, col) >= 1 for col in ["Sound_Tygerberg", "Lights_Tygerberg", "Resi_Tygerberg"])]
         eligible_assist = sorted(eligible_assist, key=lambda p: (total_skill(p), assignments_count[p]))
         assistant = next((p for p in eligible_assist if p not in used), None)
@@ -168,7 +153,6 @@ if skills_file and availability_file:
                 block.reset_index()
             ], ignore_index=True)
         full_block.to_excel(writer, sheet_name="Sunday_Services", index=False)
-
         worksheet = writer.sheets["Sunday_Services"]
         for i, col in enumerate(full_block.columns):
             column_len = max(full_block[col].astype(str).map(len).max(), len(str(col))) + 2
@@ -180,29 +164,32 @@ if skills_file and availability_file:
                 sat_df.at[r, d] = schedule["Tygerberg_Saturday"][d].get(r, "")
         sat_df.index.name = "Role"
         sat_df.to_excel(writer, sheet_name="Tygerberg_Saturday")
-
         worksheet = writer.sheets["Tygerberg_Saturday"]
         for i, col in enumerate(sat_df.reset_index().columns):
             column_len = max(sat_df.reset_index()[col].astype(str).map(len).max(), len(str(col))) + 2
             worksheet.set_column(i, i, column_len)
 
+        # Summary sheet grouped by Name and Campus for Sunday counts
         summary_df = pd.DataFrame(detailed_assignments, columns=["Name", "Campus", "Role", "Day"])
-        summary_grouped = summary_df.groupby(["Day", "Name"]).size().reset_index(name="Total Assignments")
-        summary_grouped.to_excel(writer, sheet_name="Summary", index=False)
+        sunday_summary = summary_df[summary_df["Day"] == "Sunday"].groupby(["Name", "Campus"]).size().unstack(fill_value=0).reset_index()
+        saturday_summary = summary_df[summary_df["Day"] == "Saturday"].groupby("Name").size().reset_index(name="Saturday Assignments")
+        summary_combined = pd.merge(saturday_summary, sunday_summary, on="Name", how="outer").fillna(0)
 
+        # Rename Sunday columns
+        sunday_cols = [col for col in summary_combined.columns if col in CAMPUS]
+        rename_map = {campus: f"Sunday @ {campus}" for campus in sunday_cols}
+        summary_combined = summary_combined.rename(columns=rename_map)
+
+        summary_combined.to_excel(writer, sheet_name="Summary", index=False)
         worksheet = writer.sheets["Summary"]
-        for i, col in enumerate(summary_grouped.columns):
-            column_len = max(summary_grouped[col].astype(str).map(len).max(), len(str(col))) + 2
+        for i, col in enumerate(summary_combined.columns):
+            column_len = max(summary_combined[col].astype(str).map(len).max(), len(str(col))) + 2
             worksheet.set_column(i, i, column_len)
 
+    # Final Output Section
     st.success("✅ Schedule successfully generated!")
-
-    st.markdown("### 📋 Preview: Sunday Services Schedule")
-    st.dataframe(full_block.head(25))
-
     st.markdown("### 📊 Preview: Assignment Summary")
-    st.dataframe(summary_grouped.head(25))
-
+    st.dataframe(summary_combined.head(25))
     st.download_button(
         "📥 Download Excel Schedule",
         data=output.getvalue(),
