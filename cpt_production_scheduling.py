@@ -152,80 +152,74 @@ for date in saturday_dates:
         assignment_log[assistant]["Saturday"] += 1
         detailed_assignments.append((assistant, "Tygerberg", "Assistant", "Saturday"))
 
+# === Output to Excel ===
+output = BytesIO()
+with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    role_order_sunday = [
+        "Sound Main", "Sound Assistant",
+        "Lights Main", "Lights Assistant",
+        "Resi Main", "Resi Assistant",
+        "Director"
+    ]
+    role_order_saturday = ["Sound", "Lights", "Resi", "Director", "Assistant"]
 
+    full_block = pd.DataFrame()
+    for campus in CAMPUS:
+        block = pd.DataFrame(index=role_order_sunday, columns=sunday_dates)
+        for d in sunday_dates:
+            for r in role_order_sunday:
+                block.at[r, d] = schedule[f"{campus}_Sunday"][d].get(r, "")
+        block.index.name = "Role"
+        full_block = pd.concat([
+            full_block,
+            pd.DataFrame([["Campus: " + campus] + [""] * len(sunday_dates)], columns=["Role"] + sunday_dates),
+            block.reset_index()
+        ], ignore_index=True)
+    full_block.to_excel(writer, sheet_name="Sunday_Services", index=False)
+    worksheet = writer.sheets["Sunday_Services"]
+    for i, col in enumerate(full_block.columns):
+        column_len = max(full_block[col].astype(str).map(len).max(), len(str(col))) + 2
+        worksheet.set_column(i, i, column_len)
 
-    # Output to Excel
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        role_order_sunday = [
-            "Sound Main", "Sound Assistant",
-            "Lights Main", "Lights Assistant",
-            "Resi Main", "Resi Assistant",
-            "Director"
-        ]
-        role_order_saturday = ["Sound", "Lights", "Resi", "Director", "Assistant"]
+    sat_df = pd.DataFrame(index=role_order_saturday, columns=saturday_dates)
+    for d in saturday_dates:
+        for r in role_order_saturday:
+            sat_df.at[r, d] = schedule["Tygerberg_Saturday"][d].get(r, "")
+    sat_df.index.name = "Role"
+    sat_df.to_excel(writer, sheet_name="Tygerberg_Saturday")
+    worksheet = writer.sheets["Tygerberg_Saturday"]
+    for i, col in enumerate(sat_df.reset_index().columns):
+        column_len = max(sat_df.reset_index()[col].astype(str).map(len).max(), len(str(col))) + 2
+        worksheet.set_column(i, i, column_len)
 
-        full_block = pd.DataFrame()
-        for campus in CAMPUS:
-            block = pd.DataFrame(index=role_order_sunday, columns=sunday_dates)
-            for d in sunday_dates:
-                for r in role_order_sunday:
-                    block.at[r, d] = schedule[f"{campus}_Sunday"][d].get(r, "")
-            block.index.name = "Role"
-            full_block = pd.concat([
-                full_block,
-                pd.DataFrame([["Campus: " + campus] + [""] * len(sunday_dates)], columns=["Role"] + sunday_dates),
-                block.reset_index()
-            ], ignore_index=True)
-        full_block.to_excel(writer, sheet_name="Sunday_Services", index=False)
-        worksheet = writer.sheets["Sunday_Services"]
-        for i, col in enumerate(full_block.columns):
-            column_len = max(full_block[col].astype(str).map(len).max(), len(str(col))) + 2
-            worksheet.set_column(i, i, column_len)
+    # Summary Sheet
+    summary_df = pd.DataFrame(detailed_assignments, columns=["Name", "Campus", "Role", "Day"])
+    sunday_summary = summary_df[summary_df["Day"] == "Sunday"].groupby(["Name", "Campus"]).size().unstack(fill_value=0).reset_index()
+    saturday_summary = summary_df[summary_df["Day"] == "Saturday"].groupby("Name").size().reset_index(name="Saturday Assignments")
+    summary_combined = pd.merge(saturday_summary, sunday_summary, on="Name", how="outer").fillna(0)
 
-        sat_df = pd.DataFrame(index=role_order_saturday, columns=saturday_dates)
-        for d in saturday_dates:
-            for r in role_order_saturday:
-                sat_df.at[r, d] = schedule["Tygerberg_Saturday"][d].get(r, "")
-        sat_df.index.name = "Role"
-        sat_df.to_excel(writer, sheet_name="Tygerberg_Saturday")
-        worksheet = writer.sheets["Tygerberg_Saturday"]
-        for i, col in enumerate(sat_df.reset_index().columns):
-            column_len = max(sat_df.reset_index()[col].astype(str).map(len).max(), len(str(col))) + 2
-            worksheet.set_column(i, i, column_len)
+    sunday_cols = [col for col in summary_combined.columns if col in CAMPUS]
+    rename_map = {campus: f"Sunday @ {campus}" for campus in sunday_cols}
+    summary_combined = summary_combined.rename(columns=rename_map)
 
-        # Summary sheet grouped by Name and Campus for Sunday counts
-        summary_df = pd.DataFrame(detailed_assignments, columns=["Name", "Campus", "Role", "Day"])
-        sunday_summary = summary_df[summary_df["Day"] == "Sunday"].groupby(["Name", "Campus"]).size().unstack(fill_value=0).reset_index()
-        saturday_summary = summary_df[summary_df["Day"] == "Saturday"].groupby("Name").size().reset_index(name="Saturday Assignments")
-        summary_combined = pd.merge(saturday_summary, sunday_summary, on="Name", how="outer").fillna(0)
+    assignment_cols = [col for col in summary_combined.columns if col != "Name"]
+    summary_combined["Total Assignments"] = summary_combined[assignment_cols].sum(axis=1)
+    summary_combined = summary_combined.sort_values(by="Total Assignments", ascending=False).reset_index(drop=True)
 
-        # Rename Sunday columns
-        sunday_cols = [col for col in summary_combined.columns if col in CAMPUS]
-        rename_map = {campus: f"Sunday @ {campus}" for campus in sunday_cols}
-        summary_combined = summary_combined.rename(columns=rename_map)
+    summary_combined.to_excel(writer, sheet_name="Summary", index=False)
+    worksheet = writer.sheets["Summary"]
+    for i, col in enumerate(summary_combined.columns):
+        column_len = max(summary_combined[col].astype(str).map(len).max(), len(str(col))) + 2
+        worksheet.set_column(i, i, column_len)
 
-        # Add total assignments column
-        assignment_cols = [col for col in summary_combined.columns if col != "Name"]
-        summary_combined["Total Assignments"] = summary_combined[assignment_cols].sum(axis=1)
-
-        # Sort by total assignments descending
-        summary_combined = summary_combined.sort_values(by="Total Assignments", ascending=False).reset_index(drop=True)
-
-        summary_combined.to_excel(writer, sheet_name="Summary", index=False)
-        worksheet = writer.sheets["Summary"]
-        for i, col in enumerate(summary_combined.columns):
-            column_len = max(summary_combined[col].astype(str).map(len).max(), len(str(col))) + 2
-            worksheet.set_column(i, i, column_len)
-
-    # Final Output Section
-    st.success("✅ Schedule successfully generated!")
-    st.markdown("### 📊 Preview: Assignment Summary")
-    st.dataframe(summary_combined.head(25))
-    st.download_button(
-        "📥 Download Excel Schedule",
-        data=output.getvalue(),
-        file_name="production_schedule_august_2025.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="download_schedule"
-    )
+# Final Streamlit Output
+st.success("✅ Schedule successfully generated!")
+st.markdown("### 📊 Preview: Assignment Summary")
+st.dataframe(summary_combined.head(25))
+st.download_button(
+    "📥 Download Excel Schedule",
+    data=output.getvalue(),
+    file_name="production_schedule_august_2025.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    key="download_schedule"
+)
