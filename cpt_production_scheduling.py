@@ -37,7 +37,7 @@ with open("image.png", "rb") as img_file:
     """, unsafe_allow_html=True)
 
 st.title("📅 CPT Production Team Scheduler")
-st.markdown("Upload your **Skills CSV** and **Availability CSV** below. Then click 'Generate Schedule' to preview and download the Excel file.")
+st.markdown("Upload your **Skills CSV** and **Availability CSV** below.")
 
 skills_file = st.file_uploader("Upload skills CSV", type="csv")
 availability_file = st.file_uploader("Upload availability CSV", type="csv")
