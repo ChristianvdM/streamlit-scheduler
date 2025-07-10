@@ -55,18 +55,17 @@ CAMPUS = ["Tygerberg", "Stellies"]
 ROLES_SUNDAY = ["Sound", "Lights", "Resi"]
 ROLES_SATURDAY = ["Sound", "Lights", "Resi", "Assistant"]
 
+MAX_SUNDAYS = 3
+MAX_SATURDAYS = 3
+
 schedule = {
     "Tygerberg_Sunday": {d: {} for d in sunday_dates},
     "Stellies_Sunday": {d: {} for d in sunday_dates},
     "Tygerberg_Saturday": {d: {} for d in saturday_dates},
 }
-
 assignments_count = defaultdict(int)
 assignment_log = defaultdict(lambda: {"Sunday": 0, "Saturday": 0})
 detailed_assignments = []
-
-MAX_SUNDAYS = 3
-MAX_SATURDAYS = 3
 
 def get_skill(p, col): return skills.loc[skills["Name"] == p, col].values[0]
 def get_eligible(ppl, col, lvl): return [p for p in ppl if get_skill(p, col) >= lvl]
@@ -76,8 +75,8 @@ def get_least_assigned(ppl): return sorted(ppl, key=lambda p: assignments_count[
 for date in saturday_dates + sunday_dates:
     all_available = availability[availability[date] == "Yes"]["Name"].tolist()
     if date in saturday_dates:
-        under_cap = [p for p in all_available if assignment_log[p]["Saturday"] < MAX_SATURDAYS]
-        eligible = get_eligible(under_cap, "Director", 2)
+        under_limit = [p for p in all_available if assignment_log[p]["Saturday"] < MAX_SATURDAYS]
+        eligible = get_eligible(under_limit, "Director", 2)
         pool = eligible if eligible else get_eligible(all_available, "Director", 2) or all_available
         director = next((p for p in get_least_assigned(pool)), None)
         if director:
@@ -87,8 +86,8 @@ for date in saturday_dates + sunday_dates:
             detailed_assignments.append((director, "Tygerberg", "Director", "Saturday"))
     if date in sunday_dates:
         for campus in CAMPUS:
-            under_cap = [p for p in all_available if assignment_log[p]["Sunday"] < MAX_SUNDAYS]
-            eligible = get_eligible(under_cap, "Director", 2)
+            under_limit = [p for p in all_available if assignment_log[p]["Sunday"] < MAX_SUNDAYS]
+            eligible = get_eligible(under_limit, "Director", 2)
             pool = eligible if eligible else get_eligible(all_available, "Director", 2) or all_available
             director = next((p for p in get_least_assigned(pool)), None)
             if director:
@@ -97,27 +96,25 @@ for date in saturday_dates + sunday_dates:
                 assignment_log[director]["Sunday"] += 1
                 detailed_assignments.append((director, campus, "Director", "Sunday"))
 
-# Assign Other Roles (Sunday)
+# Assign Other Roles
 for date in sunday_dates:
     all_available = availability[availability[date] == "Yes"]["Name"].tolist()
     for campus in CAMPUS:
         used = set(schedule[f"{campus}_Sunday"][date].values())
         for role in ROLES_SUNDAY:
             col = f"{role}_{campus}"
-            under_cap = [p for p in all_available if assignment_log[p]["Sunday"] < MAX_SUNDAYS and p not in used]
-            eligible_main = get_eligible(under_cap, col, 2)
-            pool_main = eligible_main if eligible_main else get_eligible([p for p in all_available if p not in used], col, 2)
-            main = next((p for p in get_least_assigned(pool_main)), None)
+            under_limit = [p for p in all_available if assignment_log[p]["Sunday"] < MAX_SUNDAYS]
+            main = next((p for p in get_least_assigned(get_eligible(under_limit, col, 2)) if p not in used), None)
+            if not main:
+                main = next((p for p in get_least_assigned(get_eligible(all_available, col, 2)) if p not in used), None)
             if main:
                 schedule[f"{campus}_Sunday"][date][f"{role} Main"] = main
                 used.add(main)
                 assignments_count[main] += 1
                 assignment_log[main]["Sunday"] += 1
                 detailed_assignments.append((main, campus, f"{role} Main", "Sunday"))
-            under_cap_assist = [p for p in all_available if assignment_log[p]["Sunday"] < MAX_SUNDAYS and p not in used and p != main]
-            eligible_assist = get_eligible(under_cap_assist, col, 1)
-            pool_assist = eligible_assist if eligible_assist else get_eligible([p for p in all_available if p not in used and p != main], col, 1)
-            assist = next((p for p in get_least_assigned(pool_assist)), None)
+
+            assist = next((p for p in get_least_assigned(get_eligible(all_available, col, 1)) if p not in used and p != main), None)
             if assist:
                 schedule[f"{campus}_Sunday"][date][f"{role} Assistant"] = assist
                 used.add(assist)
@@ -125,32 +122,36 @@ for date in sunday_dates:
                 assignment_log[assist]["Sunday"] += 1
                 detailed_assignments.append((assist, campus, f"{role} Assistant", "Sunday"))
 
-# Assign Saturday Roles
 for date in saturday_dates:
     all_available = availability[availability[date] == "Yes"]["Name"].tolist()
     used = set(schedule["Tygerberg_Saturday"][date].values())
     for role in ["Sound", "Lights", "Resi"]:
         col = f"{role}_Tygerberg"
-        under_cap = [p for p in all_available if assignment_log[p]["Saturday"] < MAX_SATURDAYS and p not in used]
-        eligible = get_eligible(under_cap, col, 2)
-        pool = eligible if eligible else get_eligible([p for p in all_available if p not in used], col, 2)
-        main = next((p for p in get_least_assigned(pool)), None)
+        under_limit = [p for p in all_available if assignment_log[p]["Saturday"] < MAX_SATURDAYS]
+        main = next((p for p in get_least_assigned(get_eligible(under_limit, col, 2)) if p not in used), None)
+        if not main:
+            main = next((p for p in get_least_assigned(get_eligible(all_available, col, 2)) if p not in used), None)
         if main:
             schedule["Tygerberg_Saturday"][date][role] = main
             used.add(main)
             assignments_count[main] += 1
             assignment_log[main]["Saturday"] += 1
             detailed_assignments.append((main, "Tygerberg", role, "Saturday"))
+
     def total_skill(p):
         return skills.loc[skills["Name"] == p, ["Sound_Tygerberg", "Lights_Tygerberg", "Resi_Tygerberg", "Director"]].sum(axis=1).values[0]
-    assist_candidates = [p for p in all_available if p not in used and any(get_skill(p, col) >= 1 for col in ["Sound_Tygerberg", "Lights_Tygerberg", "Resi_Tygerberg"])]
-    assist_candidates = sorted(assist_candidates, key=lambda p: (total_skill(p), assignments_count[p]))
-    assistant = next((p for p in assist_candidates), None)
+
+    eligible_assist = [p for p in all_available if p not in used and any(get_skill(p, col) >= 1 for col in ["Sound_Tygerberg", "Lights_Tygerberg", "Resi_Tygerberg"])]
+    eligible_assist = sorted(eligible_assist, key=lambda p: (total_skill(p), assignments_count[p]))
+    assistant = next((p for p in eligible_assist if p not in used), None)
     if assistant:
         schedule["Tygerberg_Saturday"][date]["Assistant"] = assistant
         assignments_count[assistant] += 1
         assignment_log[assistant]["Saturday"] += 1
         detailed_assignments.append((assistant, "Tygerberg", "Assistant", "Saturday"))
+
+st.success("✅ Scheduling complete.")
+st.write("You can now preview or download your schedule below.")
 
 # === Output to Excel ===
 output = BytesIO()
