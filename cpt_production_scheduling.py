@@ -6,12 +6,20 @@ from datetime import datetime
 from io import BytesIO
 
 st.set_page_config(page_title="Production Team Scheduler", layout="wide")
+
+# Add centered logo
+st.markdown("""
+    <div style='text-align: center;'>
+        <img src='image.png' width='200'>
+    </div>
+""", unsafe_allow_html=True)
+
 st.title("📅 Production Team Scheduler – August 2025")
 
-st.markdown("Upload your **Skills CSV** and **Availability CSV** below. Then click 'Generate Schedule' to export the Excel file.")
+st.markdown("Upload your **Skills CSV** and **Availability CSV** below. Then click 'Generate Schedule' to preview and download the Excel file.")
 
-skills_file = st.file_uploader("Upload cleaned_CPT_production_skills.csv", type="csv")
-availability_file = st.file_uploader("Upload availability_august_2025_final.csv", type="csv")
+skills_file = st.file_uploader("Upload skills CSV", type="csv")
+availability_file = st.file_uploader("Upload availability CSV", type="csv")
 
 if skills_file and availability_file:
     skills = pd.read_csv(skills_file)
@@ -131,6 +139,11 @@ if skills_file and availability_file:
             ], ignore_index=True)
         full_block.to_excel(writer, sheet_name="Sunday_Services", index=False)
 
+        worksheet = writer.sheets["Sunday_Services"]
+        for i, col in enumerate(full_block.columns):
+            column_len = max(full_block[col].astype(str).map(len).max(), len(str(col))) + 2
+            worksheet.set_column(i, i, column_len)
+
         sat_df = pd.DataFrame(index=role_order_saturday, columns=saturday_dates)
         for d in saturday_dates:
             for r in role_order_saturday:
@@ -138,9 +151,31 @@ if skills_file and availability_file:
         sat_df.index.name = "Role"
         sat_df.to_excel(writer, sheet_name="Tygerberg_Saturday")
 
+        worksheet = writer.sheets["Tygerberg_Saturday"]
+        for i, col in enumerate(sat_df.reset_index().columns):
+            column_len = max(sat_df.reset_index()[col].astype(str).map(len).max(), len(str(col))) + 2
+            worksheet.set_column(i, i, column_len)
+
         summary_df = pd.DataFrame(detailed_assignments, columns=["Name", "Campus", "Role", "Day"])
-        summary_grouped = summary_df.groupby(["Day", "Name", "Campus", "Role"]).size().reset_index(name="Count")
+        summary_grouped = summary_df.groupby(["Day", "Name"]).size().reset_index(name="Total Assignments")
         summary_grouped.to_excel(writer, sheet_name="Summary", index=False)
 
+        worksheet = writer.sheets["Summary"]
+        for i, col in enumerate(summary_grouped.columns):
+            column_len = max(summary_grouped[col].astype(str).map(len).max(), len(str(col))) + 2
+            worksheet.set_column(i, i, column_len)
+
     st.success("✅ Schedule successfully generated!")
-    st.download_button("📥 Download Excel Schedule", data=output.getvalue(), file_name="production_schedule_august_2025.xlsx")
+
+    st.markdown("### 📋 Preview: Sunday Services Schedule")
+    st.dataframe(full_block.head(25))
+
+    st.markdown("### 📊 Preview: Assignment Summary")
+    st.dataframe(summary_grouped.head(25))
+
+    st.download_button(
+        "📥 Download Excel Schedule",
+        data=output.getvalue(),
+        file_name="production_schedule_august_2025.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
