@@ -40,7 +40,7 @@ with open("image.png", "rb") as img_file:
     encoded = base64.b64encode(img_file.read()).decode()
     st.markdown(f"""
         <div style='text-align: center;'>
-            <img src='data:image/png;base64,{encoded}' width='300'>
+            <img src='data:image/png;base64,{encoded}' width='600'>
         </div>
     """, unsafe_allow_html=True)
 
