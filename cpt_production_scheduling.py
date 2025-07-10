@@ -14,7 +14,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-st.title("📅 Production Team Scheduler – August 2025")
+st.title("📅 Production Team Scheduler")
 
 st.markdown("Upload your **Skills CSV** and **Availability CSV** below. Then click 'Generate Schedule' to preview and download the Excel file.")
 
@@ -176,6 +176,6 @@ if skills_file and availability_file:
     st.download_button(
         "📥 Download Excel Schedule",
         data=output.getvalue(),
-        file_name="production_schedule_august_2025.xlsx",
+        file_name="CPT_production_schedule.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
