@@ -169,7 +169,7 @@ if skills_file and availability_file:
             column_len = max(sat_df.reset_index()[col].astype(str).map(len).max(), len(str(col))) + 2
             worksheet.set_column(i, i, column_len)
 
-        # Summary sheet grouped by Name and Campus for Sunday counts
+# Summary sheet grouped by Name and Campus for Sunday counts
         summary_df = pd.DataFrame(detailed_assignments, columns=["Name", "Campus", "Role", "Day"])
         sunday_summary = summary_df[summary_df["Day"] == "Sunday"].groupby(["Name", "Campus"]).size().unstack(fill_value=0).reset_index()
         saturday_summary = summary_df[summary_df["Day"] == "Saturday"].groupby("Name").size().reset_index(name="Saturday Assignments")
@@ -179,6 +179,10 @@ if skills_file and availability_file:
         sunday_cols = [col for col in summary_combined.columns if col in CAMPUS]
         rename_map = {campus: f"Sunday @ {campus}" for campus in sunday_cols}
         summary_combined = summary_combined.rename(columns=rename_map)
+
+        # Add total assignments column
+        assignment_cols = [col for col in summary_combined.columns if col != "Name"]
+        summary_combined["Total Assignments"] = summary_combined[assignment_cols].sum(axis=1)
 
         summary_combined.to_excel(writer, sheet_name="Summary", index=False)
         worksheet = writer.sheets["Summary"]
@@ -196,3 +200,4 @@ if skills_file and availability_file:
         file_name="production_schedule_august_2025.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
