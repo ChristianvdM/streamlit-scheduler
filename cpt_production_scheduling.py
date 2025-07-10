@@ -4,17 +4,20 @@ import numpy as np
 from collections import defaultdict
 from datetime import datetime
 from io import BytesIO
+import base64
 
 st.set_page_config(page_title="Production Team Scheduler", layout="wide")
 
-# Add centered logo
-st.markdown("""
-    <div style='text-align: center;'>
-        <img src='image.png' width='600'>
-    </div>
-""", unsafe_allow_html=True)
+# Load and center the logo using Streamlit's image uploader with base64 fallback
+with open("image.png", "rb") as img_file:
+    encoded = base64.b64encode(img_file.read()).decode()
+    st.markdown(f"""
+        <div style='text-align: center;'>
+            <img src='data:image/png;base64,{encoded}' width='300'>
+        </div>
+    """, unsafe_allow_html=True)
 
-st.title("📅 Production Team Scheduler")
+st.title("📅 Production Team Scheduler – August 2025")
 
 st.markdown("Upload your **Skills CSV** and **Availability CSV** below. Then click 'Generate Schedule' to preview and download the Excel file.")
 
@@ -176,6 +179,6 @@ if skills_file and availability_file:
     st.download_button(
         "📥 Download Excel Schedule",
         data=output.getvalue(),
-        file_name="CPT_production_schedule.xlsx",
+        file_name="production_schedule_august_2025.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
